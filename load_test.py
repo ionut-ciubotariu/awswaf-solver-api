@@ -12,6 +12,7 @@ Environment variables:
 """
 
 import asyncio
+import base64
 import os
 import sys
 import uuid
@@ -24,7 +25,9 @@ from AWSSolver.Solver import AwsSolver
 
 DEFAULT_TOKENS = 1
 DEFAULT_REQUESTS_PER_TOKEN = 100
-DEFAULT_TARGET_URL = "https://www.amazon.com/"
+DEFAULT_TOKEN_GENERATION_URL = "https://www.amazon.com/"  # URL to generate tokens from (challenge page)
+DEFAULT_ZYTE_TARGET_URL = "https://www.amazon.com/dp/B014DQGEH4"  # URL to test with Zyte API
+DEFAULT_ZYTE_TARGET_PRICE = "$354.29"  # Expected price in response body for validation
 DEFAULT_DOMAIN = "www.amazon.com"
 DEFAULT_USER_AGENT = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36"
 TOKEN_GENERATION_DELAY = 0.5  # seconds between token generations
@@ -67,7 +70,7 @@ class TokenGenerator:
     @staticmethod
     async def generate_tokens(
         count: int,
-        target_url: str = DEFAULT_TARGET_URL,
+        target_url: str = DEFAULT_TOKEN_GENERATION_URL,
         user_agent: str = DEFAULT_USER_AGENT,
         domain: str = DEFAULT_DOMAIN,
         delay: float = TOKEN_GENERATION_DELAY
@@ -134,8 +137,8 @@ class ZyteAPIClient:
             "httpResponseBody": True,
             "jobId": self.job_id,
             "_smartBrowserFeatures": {
-                "ignore_ban_result": True,
-                "ignore_uncork_config": True,
+                # "ignore_ban_result": True,
+                # "ignore_uncork_config": True,
                 "disable_session": False,
                 "disable_amazon_cookie": False,
                 "browserless_log": True,
@@ -162,13 +165,23 @@ class ZyteAPIClient:
         result = response.json() if response.is_success else {}
         status_code = result.get("statusCode")
 
-        # Success is only when statusCode is 200 (202 is failed)
-        is_success = status_code == 200
+        contains_price = False
+        if status_code == 200:
+            http_response_body = result.get("httpResponseBody")
+            if http_response_body:
+                try:
+                    decoded_body = base64.b64decode(http_response_body).decode('utf-8', errors='ignore')
+                    contains_price = DEFAULT_ZYTE_TARGET_PRICE in decoded_body
+                except Exception:
+                    pass
+
+        is_success = status_code == 200 and contains_price
 
         return {
             "status": response.status_code,
             "statusCode": status_code,
             "success": is_success,
+            "contains_price": contains_price,
             "token": token[:20] + "...",
         }
 
@@ -245,7 +258,8 @@ async def main():
     print("AWS WAF Token Load Tester")
     print("=" * 80)
     print(f"Job ID: {job_id}")
-    print(f"Target URL: {DEFAULT_TARGET_URL}")
+    print(f"Token generation URL: {DEFAULT_TOKEN_GENERATION_URL}")
+    print(f"Zyte API target URL: {DEFAULT_ZYTE_TARGET_URL}")
     print(f"Domain: {DEFAULT_DOMAIN}")
     print(f"Tokens to generate: {DEFAULT_TOKENS}")
     print(f"Token generation delay: {TOKEN_GENERATION_DELAY}s")
@@ -259,7 +273,7 @@ async def main():
     # Generate tokens
     tokens = await TokenGenerator.generate_tokens(
         count=DEFAULT_TOKENS,
-        target_url=DEFAULT_TARGET_URL,
+        target_url=DEFAULT_TOKEN_GENERATION_URL,
         user_agent=DEFAULT_USER_AGENT,
         domain=DEFAULT_DOMAIN,
         delay=TOKEN_GENERATION_DELAY
@@ -270,7 +284,7 @@ async def main():
         sys.exit(1)
 
     # Make requests with tokens
-    client = ZyteAPIClient(api_key, DEFAULT_TARGET_URL, job_id)
+    client = ZyteAPIClient(api_key, DEFAULT_ZYTE_TARGET_URL, job_id)
     stats = await client.make_requests_with_tokens(
         tokens,
         DEFAULT_REQUESTS_PER_TOKEN,
