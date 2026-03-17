@@ -1,0 +1,11 @@
+# Requirements for load_test.py script
+
+# HTTP client with async support (for Zyte API requests)
+httpx>=0.27.0
+
+# rnet for AWS WAF challenge solving
+rnet>=2.4.0
+
+# FastAPI and Pydantic (dependencies of AwsSolver)
+fastapi>=0.104.0
+pydantic>=2.0.0
