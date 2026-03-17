@@ -11,6 +11,7 @@ Configuration: Edit the constants at the top of this file.
 import argparse
 import asyncio
 import base64
+import random
 import sys
 import uuid
 from typing import List
@@ -210,10 +211,15 @@ class ZyteAPIClient:
                 return await self.make_request(client, token)
 
         async with httpx.AsyncClient() as client:
-            tasks = []
+            token_list = []
             for token in tokens:
-                for _ in range(requests_per_token):
-                    tasks.append(limited_request(client, token))
+                token_list.extend([token] * requests_per_token)
+
+            random.shuffle(token_list)
+
+            tasks = []
+            for token in token_list:
+                tasks.append(limited_request(client, token))
 
             completed = 0
             results = []
