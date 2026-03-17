@@ -6,14 +6,11 @@ This script generates AWS WAF tokens using AwsSolver directly,
 then uses those tokens to make requests to Zyte API.
 
 Configuration: Edit the constants at the top of this file.
-
-Environment variables:
-    ZYTEAPI_APIKEY: Your Zyte API key (required)
 """
 
+import argparse
 import asyncio
 import base64
-import os
 import sys
 import uuid
 from typing import List
@@ -23,11 +20,12 @@ from rnet import Client, Impersonate, Method
 from AWSSolver.Solver import AwsSolver
 
 
-DEFAULT_TOKENS = 1
-DEFAULT_REQUESTS_PER_TOKEN = 10000
+
+DEFAULT_TOKENS = 100
+DEFAULT_REQUESTS_PER_TOKEN = 100
 DEFAULT_TOKEN_GENERATION_URL = "https://www.amazon.com/"  # URL to generate tokens from (challenge page)
 DEFAULT_ZYTE_TARGET_URL = "https://www.amazon.com/dp/B014DQGEH4"  # URL to test with Zyte API
-DEFAULT_ZYTE_TARGET_PRICE = "$354.29"  # Expected price in response body for validation
+DEFAULT_ZYTE_TARGET_PRICE = "$354.29"  # expected price in response body for validation
 DEFAULT_DOMAIN = "www.amazon.com"
 DEFAULT_USER_AGENT = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36"
 TOKEN_GENERATION_DELAY = 0.5  # seconds between token generations
@@ -125,10 +123,11 @@ class TokenGenerator:
 
 class ZyteAPIClient:
 
-    def __init__(self, api_key: str, target_url: str, job_id: str):
+    def __init__(self, api_key: str, target_url: str, job_id: str, use_waf_token: bool = True):
         self.api_key = api_key
         self.target_url = target_url
         self.job_id = job_id
+        self.use_waf_token = use_waf_token
         self.zyte_api_url = "https://api.zyte.com/v1/extract"
 
     async def make_request(self, client: httpx.AsyncClient, token: str) -> dict:
@@ -144,16 +143,18 @@ class ZyteAPIClient:
                 "browserless_log": True,
                 "server_log": True
             },
-            "requestCookies": [
+            "followRedirect": True
+        }
+
+        if self.use_waf_token:
+            payload["requestCookies"] = [
                 {
                     "name": "aws-waf-token",
                     "value": token,
                     "domain": ".amazon.com",
                     "path": "/"
                 }
-            ],
-            "followRedirect": True
-        }
+            ]
 
         response = await client.post(
             self.zyte_api_url,
@@ -244,14 +245,14 @@ class ZyteAPIClient:
 
 
 async def main():
-    # Check for Zyte API key
-    api_key = os.getenv("ZYTEAPI_APIKEY")
-    if not api_key:
-        print("ERROR: ZYTEAPI_APIKEY environment variable is not set", file=sys.stderr)
-        print("Please set it with: export ZYTEAPI_APIKEY='your-api-key'", file=sys.stderr)
-        sys.exit(1)
+    parser = argparse.ArgumentParser(description='AWS WAF Token Load Tester')
+    parser.add_argument('--use-waf-token', action='store_true', default=True,
+                        help='Include aws-waf-token cookie in requests (default: True)')
+    parser.add_argument('--no-waf-token', action='store_false', dest='use_waf_token',
+                        help='Do not include aws-waf-token cookie in requests')
+    args = parser.parse_args()
 
-    # Generate unique job ID for this run
+    api_key = ZYTE_API_KEY
     job_id = str(uuid.uuid4())
 
     print("=" * 80)
@@ -261,6 +262,7 @@ async def main():
     print(f"Token generation URL: {DEFAULT_TOKEN_GENERATION_URL}")
     print(f"Zyte API target URL: {DEFAULT_ZYTE_TARGET_URL}")
     print(f"Domain: {DEFAULT_DOMAIN}")
+    print(f"Use WAF token cookie: {args.use_waf_token}")
     print(f"Tokens to generate: {DEFAULT_TOKENS}")
     print(f"Token generation delay: {TOKEN_GENERATION_DELAY}s")
     print(f"Requests per token: {DEFAULT_REQUESTS_PER_TOKEN}")
@@ -270,28 +272,30 @@ async def main():
 
     start_time = datetime.now()
 
-    # Generate tokens
-    tokens = await TokenGenerator.generate_tokens(
-        count=DEFAULT_TOKENS,
-        target_url=DEFAULT_TOKEN_GENERATION_URL,
-        user_agent=DEFAULT_USER_AGENT,
-        domain=DEFAULT_DOMAIN,
-        delay=TOKEN_GENERATION_DELAY
-    )
+    if args.use_waf_token:
+        tokens = await TokenGenerator.generate_tokens(
+            count=DEFAULT_TOKENS,
+            target_url=DEFAULT_TOKEN_GENERATION_URL,
+            user_agent=DEFAULT_USER_AGENT,
+            domain=DEFAULT_DOMAIN,
+            delay=TOKEN_GENERATION_DELAY
+        )
 
-    if not tokens:
-        print("\nERROR: No tokens were generated successfully", file=sys.stderr)
-        sys.exit(1)
+        if not tokens:
+            print("\nERROR: No tokens were generated successfully", file=sys.stderr)
+            sys.exit(1)
+    else:
+        print(f"\n[{datetime.now().strftime('%H:%M:%S')}] Skipping token generation (no WAF token cookie will be used)")
+        tokens = [""] * DEFAULT_TOKENS  # Create dummy tokens to maintain same request count
 
     # Make requests with tokens
-    client = ZyteAPIClient(api_key, DEFAULT_ZYTE_TARGET_URL, job_id)
+    client = ZyteAPIClient(api_key, DEFAULT_ZYTE_TARGET_URL, job_id, args.use_waf_token)
     stats = await client.make_requests_with_tokens(
         tokens,
         DEFAULT_REQUESTS_PER_TOKEN,
         MAX_CONCURRENT_REQUESTS
     )
 
-    # Print summary
     end_time = datetime.now()
     duration = (end_time - start_time).total_seconds()
 
@@ -304,7 +308,7 @@ async def main():
     print(f"Failed: {stats['failed']} ({stats['failed']/stats['total']*100:.1f}%)")
     print(f"Requests/second: {stats['total']/duration:.2f}")
     print("\nStatus code breakdown:")
-    for status, count in sorted(stats['by_status'].items()):
+    for status, count in sorted(stats['by_status'].items(), key=lambda x: (x[0] is None, x[0])):
         print(f"  {status}: {count} ({count/stats['total']*100:.1f}%)")
     print("=" * 80)
 
