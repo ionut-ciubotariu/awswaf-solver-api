@@ -1,9 +1,7 @@
 import json
-from rnet import Client, Emulation, Method, redirect
-from datetime import timedelta
+from rnet import Client, Impersonate, Method, Multipart, Part
 from .PayloadHandler import build_everything
 import random
-from rnet import Client, Emulation, Method, redirect, Multipart, Part
 from .SolutionTokenHandler import CHALLENGES
 
 BANDWIDTH_CHALLENGE = "ha9faaffd31b4d5ede2a2e19d2d7fd525f66fee61911511960dcbb52d3c48ce25"
@@ -42,7 +40,7 @@ class AwsSolver:
 
     async def _get_final_values(self, host_url):
 
-        response = await Client(emulation=Emulation.Chrome143, cookie_store=True, redirect=redirect.Policy.none()).request(method=getattr(Method, "GET"), url=f"https://{host_url}/inputs?client=browser", timeout=timedelta(seconds = 10), headers=self.headers)
+        response = await Client(impersonate=Impersonate.Chrome137, cookie_store=True, allow_redirects=False).request(method=getattr(Method, "GET"), url=f"https://{host_url}/inputs?client=browser", timeout=10, headers=self.headers)
         return await response.json()
     
     def _build_payload(self, input: dict, goku_props):
@@ -108,19 +106,19 @@ class AwsSolver:
                     value=json.dumps(payload["solution_metadata"], separators=(",", ":")).encode("utf-8"),
                 ),
             )
-            response = await Client(emulation=Emulation.Chrome143).request(
+            response = await Client(impersonate=Impersonate.Chrome137).request(
                 method=getattr(Method, "POST"),
                 url=f"https://{host_url}/mp_verify",
-                timeout=timedelta(seconds=10),
+                timeout=10,
                 headers=self.headers,
                 multipart=multipart,
             )
         else:
             payload.pop("_is_bandwidth", None)
-            response = await Client(emulation=Emulation.Chrome143).request(
+            response = await Client(impersonate=Impersonate.Chrome137).request(
                 method=getattr(Method, "POST"),
                 url=f"https://{host_url}/verify",
-                timeout=timedelta(seconds=10),
+                timeout=10,
                 headers=self.headers,
                 json=payload,
             )

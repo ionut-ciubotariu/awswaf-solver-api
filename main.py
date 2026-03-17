@@ -1,8 +1,7 @@
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
-from rnet import Client, Emulation, Method
+from rnet import Client, Impersonate, Method
 from AWSSolver.Solver import AwsSolver
-from datetime import timedelta
 from urllib.parse import urlparse
 
 app = FastAPI()
@@ -29,12 +28,12 @@ def extract_domain(value: str) -> str:
 async def solve(request: SolveRequest):
     domain = extract_domain(request.domain if request.domain else request.url)
     try:
-        client = Client(emulation=Emulation.Chrome143, cookie_store=True)
+        client = Client(impersonate=Impersonate.Chrome137, cookie_store=True)
 
         response = await client.request(
             method=getattr(Method, "GET"),
             url=request.url,
-            timeout=timedelta(seconds=15),
+            timeout=15,
             headers={"user-agent": request.user_agent},
         )
         html = await response.text()

@@ -1,7 +1,5 @@
-from rnet import Client, Emulation, Method, redirect
-import httpx
+from rnet import Client, Impersonate, Method
 import asyncio
-from datetime import timedelta
 from AWSSolver.Solver import AwsSolver
 
 URL = "https://www.binance.com/en"
@@ -24,8 +22,8 @@ HEADERS = {
         }
 async def main():
     
-    client = Client(emulation=Emulation.Chrome143, cookie_store=True, redirect=redirect.Policy.limited(max=5))
-    response = await client.request(method=getattr(Method, "GET"), url=f"{URL}", timeout=timedelta(seconds = 10), headers=HEADERS)
+    client = Client(impersonate=Impersonate.Chrome137, cookie_store=True, max_redirects=5)
+    response = await client.request(method=getattr(Method, "GET"), url=f"{URL}", timeout=10, headers=HEADERS)
     text = await response.text()
     print(f"[+] Got HTML ({len(text)} bytes)")
 
@@ -36,7 +34,7 @@ async def main():
     cookies = {
         "aws-waf-token": token
     }
-    response = await client.request(method=getattr(Method, "GET"), url=f"{URL}", timeout=timedelta(seconds = 10), headers=HEADERS, cookies = cookies)
+    response = await client.request(method=getattr(Method, "GET"), url=f"{URL}", timeout=10, headers=HEADERS, cookies = cookies)
     text = await response.text()
     print(f"[+] Status: {response.status.as_int()}")
     print(f"[+] Response: {text[:500]}")
