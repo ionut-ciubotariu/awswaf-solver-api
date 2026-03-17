@@ -24,14 +24,14 @@ from AWSSolver.Solver import AwsSolver
 
 
 DEFAULT_TOKENS = 1
-DEFAULT_REQUESTS_PER_TOKEN = 100
+DEFAULT_REQUESTS_PER_TOKEN = 10000
 DEFAULT_TOKEN_GENERATION_URL = "https://www.amazon.com/"  # URL to generate tokens from (challenge page)
 DEFAULT_ZYTE_TARGET_URL = "https://www.amazon.com/dp/B014DQGEH4"  # URL to test with Zyte API
 DEFAULT_ZYTE_TARGET_PRICE = "$354.29"  # Expected price in response body for validation
 DEFAULT_DOMAIN = "www.amazon.com"
 DEFAULT_USER_AGENT = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36"
 TOKEN_GENERATION_DELAY = 0.5  # seconds between token generations
-MAX_CONCURRENT_REQUESTS = 50  # max concurrent requests to Zyte API
+MAX_CONCURRENT_REQUESTS = 200  # max concurrent requests to Zyte API
 
 
 class TokenGenerator:
@@ -238,7 +238,7 @@ class ZyteAPIClient:
                 except Exception as e:
                     stats["failed"] += 1
                     completed += 1
-                    print(f"[ERROR] Request failed: {e.message}")
+                    print(f"[ERROR] Request failed: {e}")
 
         return stats
 
